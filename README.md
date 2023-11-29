@@ -29,7 +29,7 @@ docker-compose up
 - On the Postman set the method to Get/Post, write localhost:8080/hello in URL field and in the body write
 ```
 {
-    "path": "/home/ahmadawab"
+    "path": "/home/ahmadawab/go-training"
 }
 ```
 - Click send, you will see the result in the body tag of the output.
