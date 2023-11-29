@@ -1,4 +1,4 @@
-module go-training
+module ffprint
 
 go 1.21.4
 

@@ -2,7 +2,7 @@
 FROM golang:latest
 
 # Set the working directory
-WORKDIR /home/ahmadawab/go-training/folderprint
+WORKDIR /home/ahmadawab/ffprint
 
 # Copy the current directory contents into the container
 COPY . .

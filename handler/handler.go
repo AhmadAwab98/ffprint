@@ -1,66 +1,38 @@
 package handler
 
 import (
+	"ffprint/models"
 	"encoding/json"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"github.com/redis/go-redis/v9"
-	"context"
-	"fmt"
 	"time"
-	"crypto/md5"
-    "encoding/hex"
+	"log"
 )
-
-func GetMD5Hash(text string) string {
-   hash := md5.Sum([]byte(text))
-   return hex.EncodeToString(hash[:])
-}
-var ctx = context.Background()
-var rdb *redis.Client
-func init() {
-	rdb = redis.NewClient(&redis.Options{
-		Addr: "redis:6379", Password: "", DB: 0,
-	})
-}
-
-// represent expected JSON structure in request body
-type bodyRequest struct {
-	Path string `json:"path"`
-}
-
-// represent JSON structure of response body
-type bodyResponse struct {
-	Name string `json:"Name" redis:"Name"`
-	Contents []bodyResponse `json:"Contents,omitempty" redis:"Contents"`
-}
 
 func ListHandler(w http.ResponseWriter, r *http.Request) {
 
-	// decode JSON into bodyRequest
+	// decode JSON into BodyRequest
 	decoder := json.NewDecoder(r.Body)
-	var request bodyRequest
+	var request models.BodyRequest
 	err:= decoder.Decode(&request)
 	if err != nil {
-        return
-    }
+		log.Println(err)
+		return
+	}
 	responseCache := GetMD5Hash(request.Path)
 
-	var response, cache bodyResponse
+	var response, cache models.BodyResponse
 
-	exists, _ := rdb.Exists(ctx,responseCache).Result()
-
-	if exists == 1{
+	if exists, _ := rdb.Exists(ctx, responseCache).Result(); exists == 1 {
 		// get the response from cache and convert it into json format
 		responsecached, _ := rdb.HGetAll(ctx,responseCache).Result()
-		err = json.Unmarshal([]byte(responsecached["cachedData"]), &cache)
+		_ = json.Unmarshal([]byte(responsecached["cachedData"]), &cache)
 		JSONresponse1, _ := json.MarshalIndent(cache, "", "	")
 		// respond to client using cache
-	 w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(JSONresponse1))
-		return
 	}
 
 	// prepare response
@@ -69,6 +41,7 @@ func ListHandler(w http.ResponseWriter, r *http.Request) {
 	// converting to JSON
 	JSONresponse, errjson := json.Marshal(response)
 	if errjson != nil {
+		log.Println(err)
 		return
 	}
 
@@ -77,17 +50,15 @@ func ListHandler(w http.ResponseWriter, r *http.Request) {
 	err = rdb.Expire(ctx, responseCache, 5*time.Minute).Err()
 
 	if(err != nil) {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 
 	// respond to client using actual data
 	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(JSONresponse))
-	return
 }
 
-func recPrepareResponse(Path string, response *bodyResponse) {
+func recPrepareResponse(Path string, response *models.BodyResponse) {
 	info, err := os.Stat(Path)
 
 	// getting the name of the directory/file
@@ -95,17 +66,19 @@ func recPrepareResponse(Path string, response *bodyResponse) {
 	switch {
 	case err != nil:
 		// if broken or not opening return
+		log.Println(err)
 		return
 	case info.IsDir():
 		// add the folder to content 
 		response.Name = name[len(name) - 1]
 		files, err := os.ReadDir(Path)
 		if err != nil {
+			log.Println(err)
 			return
 		}
 		for _, file := range files {
 			// call the function recursively on every directory
-			var subResponse bodyResponse
+			var subResponse models.BodyResponse
 			recPrepareResponse(filepath.Join(Path, file.Name()), &subResponse)
 			response.Contents = append(response.Contents, subResponse)
 		}
@@ -113,5 +86,4 @@ func recPrepareResponse(Path string, response *bodyResponse) {
 		// add files to content
 		response.Name = name[len(name) - 1]
 	}
-	return
 }
